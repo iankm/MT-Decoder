@@ -55,10 +55,10 @@ for f in french:
 
         # need to iterate through every possible adjacent phrase
         # phrase2 can extend from end of phrase1 until end of tm
-        for l in range(i+1, j):
-          if f[i:l] in tm and f[l:j] in tm:
-            for phrase1 in tm[f[i:l]]:
-              for phrase2 in tm[f[l:j]]:
+        for k in range(i+1, j):
+          if f[i:k] in tm and f[k:j] in tm:
+            for phrase1 in tm[f[i:k]]:
+              for phrase2 in tm[f[k:j]]:
                 logprob2 = h.logprob + phrase2.logprob
 
             # summate logprob for words in phrase 2
