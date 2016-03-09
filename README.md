@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 There are two python programs here (-h for usage):
 
 -`decode` translates input sentences from French to English.
@@ -31,3 +32,7 @@ originally aligned by Ulrich Germann:
 
 The language model and translation model are computed from the data 
 in the align directory, using alignments from the Berkeley aligner.
+=======
+# MT-Decoder
+Machine Translation Decoder Assignment
+>>>>>>> f3a8ee8f2a27361fff81af9e77d40a48f44b925c
