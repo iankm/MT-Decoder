@@ -3,6 +3,7 @@ import optparse
 import sys
 import models
 from collections import namedtuple
+from collections import defaultdict
 from numpy.random import choice
 import math
 
@@ -15,6 +16,11 @@ optparser.add_option("-k", "--translations-per-phrase", dest="k", default=1, typ
 optparser.add_option("-s", "--stack-size", dest="s", default=1, type="int", help="Maximum stack size (default=1)")
 optparser.add_option("-v", "--verbose", dest="verbose", action="store_true", default=False,  help="Verbose mode (default=off)")
 opts = optparser.parse_args()[0]
+
+class Phrase:
+    def __init__(self, fr, eng):
+        self.fr = fr
+        self.eng = eng
 
 tm = models.TM(opts.tm, opts.k)
 lm = models.LM(opts.lm)
@@ -40,13 +46,23 @@ for f in french:
         e_phrases.append(french_phrase)
 
     # iteratively resample
-    for i in range(0, 1000):
+    translations = defaultdict(lambda: 0)
+    for i in range(0, 10000):
         # sample new translations
         lm_state = lm.begin()
-        for e_phrase in e_phrases:
+        for j in range(0, len(e_phrases)):
+            e_phrase = e_phrases[j]
             # randomly choose a phrase translation
             candidate_phrases = tm[e_phrase.fr]
-            probs = [math.exp(x.logprob) * lm.score(lm_state, e_phrase)[1]]
+            lm_scores = []
+            for cp in candidate_phrases:
+                lm_new, logprob = lm.score(lm_state, cp.english)
+                for k in range(j + 1, len(e_phrases)):
+                    lm_new, newprob = lm.score(lm_new, e_phrases[k].eng)
+                    logprob += newprob
+                logprob += lm.end(lm_new)
+                lm_scores.append(logprob)
+            probs = [math.exp(candidate_phrases[k].logprob) * math.exp(lm_scores[k]) for k in range(0, len(candidate_phrases))]
             norm = sum(probs)
             probs = [x / norm for x in probs]
 
@@ -55,10 +71,9 @@ for f in french:
 
             # update lm state
             lm_state, word_logprob = lm.score(lm_state, new_eng)
-        print e_phrases
-            
-
-class Phrase:
-    def __init__(self, fr, eng):
-        self.fr = fr
-        self.eng = eng
+        translations[" ".join([x.eng for x in e_phrases])] += 1
+    '''
+    print sorted(translations.keys(), key = lambda x: translations[x], reverse = True)[0]
+    print translations[sorted(translations.keys(), key = lambda x: translations[x], reverse = True)[0]]
+    '''
+    sys.exit()
