@@ -92,7 +92,6 @@ def split(k, j, f_phrase, f_phrases, e_phrases, lm, lm_state):
     f_phrases.insert(j, selected_option[0])
     if len(selected_option) > 1:
         f_phrases.insert(j + 1, selected_option[1])
-        j += 1
     
     for x in range(0, len(e_phrases)):
         if e_phrases[x] == old_phrase:
@@ -100,10 +99,6 @@ def split(k, j, f_phrase, f_phrases, e_phrases, lm, lm_state):
             e_phrases.insert(x, selected_option[0])
             if len(selected_option) > 1:
                 e_phrases.insert(x + 1, selected_option[1])
-
-    if len(selected_option) > 1:
-        f_phrase = selected_option[1]
-        k = -1
 
     # update the LM
     for eng_phrase in selected_option:
@@ -144,7 +139,7 @@ for f in french:
 
     # iteratively resample
     translations = defaultdict(lambda: 0)
-    for i in range(0, 100):
+    for i in range(0, 1):
         # sample new translations
         lm_state = lm.begin()
         for j in range(0, len(e_phrases)):
@@ -182,27 +177,51 @@ for f in french:
         while j < len(f_phrases) - 1:
             j += 1
             
-            f_phrase = f_phrases[j]
-
             # try to split within the phrase
             k = 0
-            while k < len(f_phrase.fr):
+            while k < len(f_phrases[j].fr):
+                f_phrase = f_phrases[j]
+                print f_phrase.fr, k
                 # split case
                 if k != len(f_phrase.fr) - 1:
                     lm_state = split(k, j, f_phrase, f_phrases, e_phrases, lm, lm_state)
 
                 # merge case
-                else:
+                elif f_phrase != f_phrases[-1]:
                     '''
-                    next_phrase = f_phrases[phrase_selected + 1]
-                    merged_phrase = selected_phrase.fr + next_phrase.fr
-                    print "Merged phrase: " + str(merged_phrase)
-                    '''
+                    candidate_results = []
+                    candidate_probs = []
 
+                    print [x.fr for x in f_phrases]
+                    candidate_results.append([f_phrase, f_phrases[j + 1]])
+                    candidate_results.append([f_phrase, f_phrases[j + 1]])
 
+                    lm_new = None
+                    logprob = 0
+                    for word in f_phrase.eng.split():
+                        lm_new, newprob = lm.score(lm_state, word)
+                        logprob += newprob
+                    for word in f_phrases[j + 1].eng.split():
+                        lm_new, newprob = lm.score(lm_state, word)
+                        logprob += newprob
+                    for l in range(j + 2, len(e_phrases)):
+                        for word in e_phrases[l].eng.split():
+                            lm_new, newprob = lm.score(lm_new, word)
+                            logprob += newprob
+                    logprob += lm.end(lm_new)
+                    candidate_probs.append(math.exp(logprob) * math.exp([p.logprob for p in tm[f_phrase.fr] if p.english == f_phrase.eng][0]) * math.exp([p.logprob for p in tm[f_phrases[j + 1].fr] if p.english == f_phrases[j + 1].eng][0]))
+                    candidate_probs.append(math.exp(logprob) * math.exp([p.logprob for p in tm[f_phrase.fr] if p.english == f_phrase.eng][0]) * math.exp([p.logprob for p in tm[f_phrases[j + 1].fr] if p.english == f_phrases[j + 1].eng][0]))
+
+                    print candidate_probs
+                    print [[x.fr for x in y] for y in candidate_results]
+                    sys.exit()
 
                     # split again if we actually merged
+                    '''
 
+                    pass
+
+                print [x.fr for x in f_phrases]
                 k += 1
 
         # add this translation
