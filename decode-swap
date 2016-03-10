@@ -55,10 +55,10 @@ for f in french:
 
         # need to iterate through every possible adjacent phrase
         # phrase2 can extend from end of phrase1 until end of tm
-        for l in range(i+1, j):
-          if f[i:l] in tm and f[l:j] in tm:
-            for phrase1 in tm[f[i:l]]:
-              for phrase2 in tm[f[l:j]]:
+        for k in range(i+1, j):
+          if f[i:k] in tm and f[k:j] in tm:
+            for phrase1 in tm[f[i:k]]:
+              for phrase2 in tm[f[k:j]]:
                 logprob2 = h.logprob + phrase2.logprob
 
             # summate logprob for words in phrase 2
@@ -70,12 +70,17 @@ for f in french:
             new_hypothesis2 = hypothesis(logprob2, lm_state2, h, phrase2)
 
             logprob1 = logprob2 + phrase1.logprob
+
+            #summate logprob for words in phrase 1
             lm_state1 = lm_state2
             for word in phrase1.english.split():
               (lm_state1, word_logprob) = lm.score(lm_state1, word)
               logprob1 += word_logprob
+
+            # if phrase extends to end of sentence add EOS
             logprob1 += lm.end(lm_state1) if j == len(f) else 0.0
             new_hypothesis1 = hypothesis(logprob1, lm_state1, new_hypothesis2, phrase1)
+
             if lm_state1 not in stacks[j] or stacks[j][lm_state1].logprob < logprob1: # second case is recombination
               stacks[j][lm_state1] = new_hypothesis1
 
