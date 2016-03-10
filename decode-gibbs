@@ -56,7 +56,7 @@ for f in french:
 
     # iteratively resample
     translations = defaultdict(lambda: 0)
-    for i in range(0, 1000):
+    for i in range(0, 100):
         # sample new translations
         lm_state = lm.begin()
         for j in range(0, len(e_phrases)):
@@ -89,14 +89,11 @@ for f in french:
                 lm_state, word_logprob = lm.score(lm_state, word)
 
         # sample new merge/split
-        '''
-        for each phrase
-            for each word in phrase
-                try to split
-            try to merge most recent phrase with next phrase
-        '''
         lm_state = lm.begin()
-        for j in range(0, len(f_phrases)):
+        j = -1
+        while j < len(f_phrases) - 1:
+            j += 1
+            
             f_phrase = f_phrases[j]
 
             # try to split within the phrase
@@ -166,9 +163,28 @@ for f in french:
                     selected_option = candidate_results[selected_index]
 
                     # update the data structures
-                    print selected_option
+                    old_phrase = f_phrase
+                    f_phrases.pop(j)
+                    f_phrases.insert(j, selected_option[0])
+                    if len(selected_option) > 1:
+                        f_phrases.insert(j + 1, selected_option[1])
+                        j += 1
+                    
+                    for x in range(0, len(e_phrases)):
+                        if e_phrases[x] == old_phrase:
+                            e_phrases.pop(x)
+                            e_phrases.insert(x, selected_option[0])
+                            if len(selected_option) > 1:
+                                e_phrases.insert(x + 1, selected_option[1])
+
+                    if len(selected_option) > 1:
+                        f_phrase = selected_option[1]
+                        k = -1
 
                     # update the LM
+                    for eng_phrase in selected_option:
+                        for eng_word in eng_phrase.eng.split():
+                            lm_state, prob = lm.score(lm_state, eng_word)
 
                 # merge case
                 else:
@@ -178,22 +194,8 @@ for f in french:
                     print "Merged phrase: " + str(merged_phrase)
                     '''
 
-
-
                 k += 1
 
-        #print "Selected word: "
-        #print selected_word
-        #sys.exit()
-
-
-
-        #for j in range(0, len(f_phrases)):
-        #    f_phrase = f_phrases[j]
-        #    for k in range(1, len(f_phrase.fr.split())):
-                # try to split here
-
-    #translations[" ".join([x.eng for x in e_phrases])] += 1
     print sorted(translations.keys(), key = lambda x: translations[x], reverse = True)[0]
     print translations[sorted(translations.keys(), key = lambda x: translations[x], reverse = True)[0]]
     sys.exit()
