@@ -1,0 +1,64 @@
+#!/usr/bin/env python
+import optparse
+import sys
+import models
+from collections import namedtuple
+from numpy.random import choice
+import math
+
+optparser = optparse.OptionParser()
+optparser.add_option("-i", "--input", dest="input", default="data/input", help="File containing sentences to translate (default=data/input)")
+optparser.add_option("-t", "--translation-model", dest="tm", default="data/tm", help="File containing translation model (default=data/tm)")
+optparser.add_option("-l", "--language-model", dest="lm", default="data/lm", help="File containing ARPA-format language model (default=data/lm)")
+optparser.add_option("-n", "--num_sentences", dest="num_sents", default=sys.maxint, type="int", help="Number of sentences to decode (default=no limit)")
+optparser.add_option("-k", "--translations-per-phrase", dest="k", default=1, type="int", help="Limit on number of translations to consider per phrase (default=1)")
+optparser.add_option("-s", "--stack-size", dest="s", default=1, type="int", help="Maximum stack size (default=1)")
+optparser.add_option("-v", "--verbose", dest="verbose", action="store_true", default=False,  help="Verbose mode (default=off)")
+opts = optparser.parse_args()[0]
+
+tm = models.TM(opts.tm, opts.k)
+lm = models.LM(opts.lm)
+french = [tuple(line.strip().split()) for line in open(opts.input).readlines()[:opts.num_sents]]
+
+# tm should translate unknown words as-is with probability 1
+for word in set(sum(french,())):
+  if (word,) not in tm:
+    tm[(word,)] = [models.phrase(word, 0.0)]
+
+sys.stderr.write("Decoding %s...\n" % (opts.input,))
+for f in french:
+    # initialize the english translation with words as phrases
+    f_phrases = []
+    e_phrases = []
+    for f_word in f:
+        # randomly choose a phrase translation
+        trans = tm[(f_word,)]
+        norm = sum([math.exp(x.logprob) for x in trans])
+        new_e = trans[choice(len(trans), p = [math.exp(x.logprob) / norm for x in trans])]
+        french_phrase = Phrase((f_word,), new_e)
+        f_phrases.append(french_phrase)
+        e_phrases.append(french_phrase)
+
+    # iteratively resample
+    for i in range(0, 1000):
+        # sample new translations
+        lm_state = lm.begin()
+        for e_phrase in e_phrases:
+            # randomly choose a phrase translation
+            candidate_phrases = tm[e_phrase.fr]
+            probs = [math.exp(x.logprob) * lm.score(lm_state, e_phrase)[1]]
+            norm = sum(probs)
+            probs = [x / norm for x in probs]
+
+            new_eng = candidate_phrases[choice(len(candidate_phrases), p = probs)].english
+            e_phrase.eng = new_eng
+
+            # update lm state
+            lm_state, word_logprob = lm.score(lm_state, new_eng)
+        print e_phrases
+            
+
+class Phrase:
+    def __init__(self, fr, eng):
+        self.fr = fr
+        self.eng = eng
