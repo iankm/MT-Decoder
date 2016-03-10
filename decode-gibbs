@@ -38,12 +38,19 @@ for f in french:
     # initialize the english translation with words as phrases
     f_phrases = []
     e_phrases = []
+    f = [("que", "se", "est")]
     for f_word in f:
         # randomly choose a phrase translation
+        '''
         trans = tm[(f_word,)]
+        '''
+        trans = tm[f_word]
         norm = sum([math.exp(x.logprob) for x in trans])
         new_e = trans[choice(len(trans), p = [math.exp(x.logprob) / norm for x in trans])].english
+        '''
         french_phrase = Phrase((f_word,), new_e)
+        '''
+        french_phrase = Phrase(f_word, new_e)
         f_phrases.append(french_phrase)
         e_phrases.append(french_phrase)
 
@@ -88,22 +95,92 @@ for f in french:
                 try to split
             try to merge most recent phrase with next phrase
         '''
-        phrase_select = np.random.randint(0, len(f_phrases))
-        selected_phrase = f_phrases[phrase_select]
-        print "Selected phrase: " + str(selected_phrase.fr)
-        word_select = np.random.randint(0, len(selected_phrase.fr))
-        selected_word = selected_phrase.fr[word_select]
+        lm_state = lm.begin()
+        for j in range(0, len(f_phrases)):
+            f_phrase = f_phrases[j]
 
-        if word_select == len(selected_phrase.fr) - 1 and phrase_select < len(f_phrases) - 1:
-            next_phrase = f_phrases[phrase_select + 1]
-            merged_phrase = selected_phrase.fr + next_phrase.fr
-            print "Merged phrase: " + str(merged_phrase)
+            # try to split within the phrase
+            k = 0
+            while k < len(f_phrase.fr):
+                # split case
+                if k != len(f_phrase.fr) - 1:
+                    candidate_results = []
+                    candidate_probs = []
+
+                    candidate_results.append([f_phrase])
+                    candidate_results.append([f_phrase])
+
+                    lm_new = None
+                    logprob = 0
+                    for word in f_phrase.eng.split():
+                        lm_new, newprob = lm.score(lm_state, word)
+                        logprob += newprob
+                    for l in range(j + 1, len(e_phrases)):
+                        for word in e_phrases[l].eng.split():
+                            lm_new, newprob = lm.score(lm_new, word)
+                            logprob += newprob
+                    logprob += lm.end(lm_new)
+                    candidate_probs.append(math.exp(logprob) * math.exp([p.logprob for p in tm[f_phrase.fr] if p.english == f_phrase.eng][0]))
+                    candidate_probs.append(math.exp(logprob) * math.exp([p.logprob for p in tm[f_phrase.fr] if p.english == f_phrase.eng][0]))
 
 
-            sys.exit()
+                    f_phrase1 = f_phrase.fr[0:k + 1]
+                    f_phrase2 = f_phrase.fr[k+1:]
+
+                    # figure out every translation and add to candidates
+                    f_1_trans = tm[f_phrase1]
+                    f_2_trans = tm[f_phrase2]
+
+                    if f_phrase1 in tm and f_phrase2 in tm:
+                        maxprob = float("-inf")
+                        for trans1 in f_1_trans:
+                            for trans2 in f_2_trans:
+
+                                lm_new = None
+                                logprob = 0
+                                for word in trans1.english.split():
+                                    lm_new, newprob = lm.score(lm_state, word)
+                                    logprob += newprob
+                                for word in trans2.english.split():
+                                    lm_new, newprob = lm.score(lm_state, word)
+                                    logprob += newprob
+
+                                for l in range(j + 1, len(e_phrases)):
+                                    for word in e_phrases[l].eng.split():
+                                        lm_new, newprob = lm.score(lm_new, word)
+                                        logprob += newprob
+                                logprob += lm.end(lm_new)
+
+                                overall_prob = math.exp(logprob) * math.exp(trans1.logprob) * math.exp(trans2.logprob)
+                                if overall_prob > maxprob:
+                                    candidate_probs.pop(1)
+                                    candidate_probs.append(overall_prob)
+                                    candidate_results.pop(1)
+                                    candidate_results.append([Phrase(f_phrase1, trans1.english), Phrase(f_phrase2, trans2.english)])
+                                    maxprob = overall_prob
+
+                    # make a choice
+                    norm = sum(candidate_probs)
+                    candidate_probs = [x / norm for x in candidate_probs]
+                    selected_index = choice(len(candidate_results), p = candidate_probs)
+                    selected_option = candidate_results[selected_index]
+
+                    # update the data structures
+                    print selected_option
+
+                    # update the LM
+
+                # merge case
+                else:
+                    '''
+                    next_phrase = f_phrases[phrase_selected + 1]
+                    merged_phrase = selected_phrase.fr + next_phrase.fr
+                    print "Merged phrase: " + str(merged_phrase)
+                    '''
 
 
 
+                k += 1
 
         #print "Selected word: "
         #print selected_word
