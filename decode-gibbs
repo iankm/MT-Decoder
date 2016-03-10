@@ -58,8 +58,9 @@ for f in french:
             for cp in candidate_phrases:
                 lm_new, logprob = lm.score(lm_state, cp.english)
                 for k in range(j + 1, len(e_phrases)):
-                    lm_new, newprob = lm.score(lm_new, e_phrases[k].eng)
-                    logprob += newprob
+                    for word in e_phrases[k].eng.split():
+                        lm_new, newprob = lm.score(lm_new, word)
+                        logprob += newprob
                 logprob += lm.end(lm_new)
                 lm_scores.append(logprob)
             probs = [math.exp(candidate_phrases[k].logprob) * math.exp(lm_scores[k]) for k in range(0, len(candidate_phrases))]
@@ -70,7 +71,8 @@ for f in french:
             e_phrase.eng = new_eng
 
             # update lm state
-            lm_state, word_logprob = lm.score(lm_state, new_eng)
+            for word in new_eng.split():
+                lm_state, word_logprob = lm.score(lm_state, word)
         translations[" ".join([x.eng for x in e_phrases])] += 1
     '''
     print sorted(translations.keys(), key = lambda x: translations[x], reverse = True)[0]
