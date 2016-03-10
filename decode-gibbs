@@ -47,7 +47,7 @@ for f in french:
 
     # iteratively resample
     translations = defaultdict(lambda: 0)
-    for i in range(0, 10000):
+    for i in range(0, 1000):
         # sample new translations
         lm_state = lm.begin()
         for j in range(0, len(e_phrases)):
@@ -77,6 +77,20 @@ for f in french:
             # update lm state
             for word in new_eng.split():
                 lm_state, word_logprob = lm.score(lm_state, word)
+
+        # sample new merge/split
+        '''
+        for each phrase
+            for each word in phrase
+                try to split
+            try to merge most recent phrase with next phrase
+        '''
+        for j in range(0, len(f_phrases)):
+            f_phrase = f_phrases[j]
+            for k in range(1, len(f_phrase.fr.split())):
+                # try to split here
+
+
         translations[" ".join([x.eng for x in e_phrases])] += 1
     print sorted(translations.keys(), key = lambda x: translations[x], reverse = True)[0]
     print translations[sorted(translations.keys(), key = lambda x: translations[x], reverse = True)[0]]
