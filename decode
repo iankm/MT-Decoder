@@ -14,6 +14,7 @@ optparser.add_option("-s", "--stack-size", dest="s", default=1, type="int", help
 optparser.add_option("-v", "--verbose", dest="verbose", action="store_true", default=False,  help="Verbose mode (default=off)")
 opts = optparser.parse_args()[0]
 
+# tuples of words stored in tm
 tm = models.TM(opts.tm, opts.k)
 lm = models.LM(opts.lm)
 french = [tuple(line.strip().split()) for line in open(opts.input).readlines()[:opts.num_sents]]
@@ -35,22 +36,34 @@ for f in french:
   stacks = [{} for _ in f] + [{}]
   stacks[0][lm.begin()] = initial_hypothesis
   for i, stack in enumerate(stacks[:-1]):
+    # looping through stack dictionary, start with lowest log probability 
     for h in sorted(stack.itervalues(),key=lambda h: -h.logprob)[:opts.s]: # prune
       for j in xrange(i+1,len(f)+1):
+        # if range of words exists in tm
         if f[i:j] in tm:
           for phrase in tm[f[i:j]]:
-            #The monotone, unchanged
+            # The monotone, unchanged
+            # add logprob of phrase to hypothesis logprob
             logprob = h.logprob + phrase.logprob
             lm_state = h.lm_state
+
+            # given current state, find logprob of each word in phrase
             for word in phrase.english.split():
               (lm_state, word_logprob) = lm.score(lm_state, word)
               logprob += word_logprob
+
+            # add logprob of end of sentence
             logprob += lm.end(lm_state) if j == len(f) else 0.0
+
+            # given current data create new hypothesis
             new_hypothesis = hypothesis(logprob, lm_state, h, phrase)
+
+            # if log prob lower, add to current stack for the state
             if lm_state not in stacks[j] or stacks[j][lm_state].logprob < logprob: # second case is recombination
               stacks[j][lm_state] = new_hypothesis 
 
-
+  
+  # lowest absolute log probability is winner
   winner = max(stacks[-1].itervalues(), key=lambda h: h.logprob)
   def extract_english(h): 
     return "" if h.predecessor is None else "%s%s " % (extract_english(h.predecessor), h.phrase.english)
