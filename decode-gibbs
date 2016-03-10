@@ -40,7 +40,7 @@ for f in french:
         # randomly choose a phrase translation
         trans = tm[(f_word,)]
         norm = sum([math.exp(x.logprob) for x in trans])
-        new_e = trans[choice(len(trans), p = [math.exp(x.logprob) / norm for x in trans])]
+        new_e = trans[choice(len(trans), p = [math.exp(x.logprob) / norm for x in trans])].english
         french_phrase = Phrase((f_word,), new_e)
         f_phrases.append(french_phrase)
         e_phrases.append(french_phrase)
@@ -56,7 +56,11 @@ for f in french:
             candidate_phrases = tm[e_phrase.fr]
             lm_scores = []
             for cp in candidate_phrases:
-                lm_new, logprob = lm.score(lm_state, cp.english)
+                lm_new = None
+                logprob = 0
+                for word in cp.english.split():
+                    lm_new, newprob = lm.score(lm_state, word)
+                    logprob += newprob
                 for k in range(j + 1, len(e_phrases)):
                     for word in e_phrases[k].eng.split():
                         lm_new, newprob = lm.score(lm_new, word)
@@ -74,8 +78,6 @@ for f in french:
             for word in new_eng.split():
                 lm_state, word_logprob = lm.score(lm_state, word)
         translations[" ".join([x.eng for x in e_phrases])] += 1
-    '''
     print sorted(translations.keys(), key = lambda x: translations[x], reverse = True)[0]
     print translations[sorted(translations.keys(), key = lambda x: translations[x], reverse = True)[0]]
-    '''
     sys.exit()
