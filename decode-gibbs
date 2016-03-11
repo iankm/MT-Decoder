@@ -261,12 +261,63 @@ for f in french:
                         x += 1
 
                     # update the LM
+
                     # TODO this doesn't consider reordering
                     for eng_phrase in selected_option:
                         for eng_word in eng_phrase.eng.split():
                             lm_state, prob = lm.score(lm_state, eng_word)
 
                 k += 1
+        '''set a limit, but for now, screw it
+        for index1 in range(0,len(e_phrases)):
+            for index2 in range(0,len(e_phrases)):
+                if index2 == index1:
+                    continue
+                else:
+                    #reorder
+                    phrase1 = e_phrases[index1]
+                    phrase2 = e_phrases[index2]
+                    #create logprob for phrases' lm_states
+                    reorder_probs = []
+                    lm_state1 = lm.begin()
+                    logprob = 0
+                    for word in phrase1.eng.split():
+                        lm_state1, newprob = lm.score(lm_state1,word)
+                        logprob += newprob
+                    for word in phrase2.eng.split():
+                        lm_state1, newprob = lm.score(lm_state1,word)
+                        logprob += newprob
+                    for l in range(index1 + 2, len(e_phrases)):
+                        for word in e_phrases[l].eng.split():
+                            lm_state1, newprob = lm.score(lm_state1,word)
+                            logprob += newprob
+                    logprob += lm.end(lm_state1)
+                    #do this for lm, not tm
+                    #get the probability of this ordering vs. the opposite ordering in regards to their "frequency" in the English model.
+                    reorder_probs.append(math.exp(logprob)*math.exp(sum(lm.score(lm_state1,w)[1] for w in phrase1.eng.split())) * math.exp(sum(lm.score(lm_state1,w)[1] for w in phrase2.eng.split())))
+                    e_phrases[index1] = phrase2
+                    e_phrases[index2] = phrase1
+                    lm_state2 = lm.begin()
+                    logprob2 = 0
+                    for word in phrase1.eng.split():
+                        lm_state2, newprob = lm.score(lm_state2,word)
+                        logprob += newprob
+                    for word in phrase2.eng.split():
+                        lm_state2, newprob = lm.score(lm_state2,word)
+                        logprob += newprob
+                    for l in range(index1 + 2, len(e_phrases)):
+                        for word in e_phrases[l].eng.split():
+                            lm_state2, newprob = lm.score(lm_state2,word)
+                            logprob += newprob
+                    reorder_probs.append(math.exp(logprob)*math.exp(sum(lm.score(lm_state1,w)[1] for w in phrase1.eng.split())) * math.exp(sum(lm.score(lm_state1,w)[1] for w in phrase2.eng.split())))
+                    if reorder_probs[0] > reorder_probs[1]:
+                        e_phrases[index1] = phrase1
+                        e_phrases[index2] = phrase2
+                    for phrase in e_phrases:
+                        sys.stdout.write(phrase.eng + " ")
+                    print  '''
+
+
 
         # add this translation
         translations[" ".join([x.eng for x in e_phrases])] += 1
