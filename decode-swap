@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import optparse
 import sys
+import numpy as np
 import models
 from collections import namedtuple
 

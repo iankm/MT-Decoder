@@ -3,6 +3,7 @@
 import optparse
 import sys
 import models
+import numpy as np
 from collections import namedtuple
 
 
@@ -17,107 +18,94 @@ optparser.add_option("-s", "--stack-size", dest="s", default=250, type="int", he
 optparser.add_option("-v", "--verbose", dest="verbose", action="store_true", default=False,  help="Verbose mode (default=off)")
 opts = optparser.parse_args()[0]
 
-
-# load translation and language models
 tm = models.TM(opts.tm, opts.k)
 lm = models.LM(opts.lm)
-# load french sentences that need decoding
+# french input sentences
 french = [tuple(line.strip().split()) for line in open(opts.input).readlines()[:opts.num_sents]]
-# tm should translate unknown words as-is with probability 1
+# if word unknown, translate as is
 for word in set(sum(french,())):
   if (word,) not in tm:
     tm[(word,)] = [models.phrase(word, 0.0)]
 
-# define our hypothesis tuples
+# define our hypothesis tuples, now included coverage
 hypothesis = namedtuple("hypothesis", "logprob, lm_state, predecessor, phrase, coverage, start, end")
 
-def expand_hypothesis(h, f, start, end):
-    """ expand the hypothesis with the phrase in the french sentence b/w start and end """
-    
+def coverage_hypothesis(h, f, start, end):
+    # if this phrase does not exist in tm, we can't translate it
     if f[start:end] not in tm:
         return None
 
+    # if a portion of this phrase has been translated, don't retranslate
     for i in range(start, end):
         if h.coverage[i] is 1:
             return None   
 
-    # compute the new coverage vector
-    cover = [x for x in h.coverage]
+    # update coverage vector
+    covered = [k for k in h.coverage]
     for i in range(start, end):
-        cover[i] = 1
-    cover = tuple(cover)
+        covered[i] = 1
+    covered = tuple(covered)
 
-    # expand the hypothesis with each possible phrase translation
+    # expand hypothesis for phrase translations
     new_hypotheses = []
-
     for phrase in tm[f[start:end]]: 
-        # compute the new log probability of the new hypothesis
+        # compute log probability
         logprob = h.logprob + phrase.logprob
-
-        # compute the new language model score
         lm_state = h.lm_state
         for word in phrase.english.split():
             (lm_state, word_logprob) = lm.score(lm_state, word)
             logprob += word_logprob
 
-        # add probability of sentence \end if at last phrase
-        logprob += lm.end(lm_state) if sum(cover)==len(f) else 0.0
+        # add ending probability
+        logprob += lm.end(lm_state) if sum(covered)==len(f) else 0.0
 
-        # create a new hypothesis with this phrase translation
-        new_hypothesis = hypothesis(logprob, lm_state, h, phrase, cover, start, end)
+        # generate new hypothesis
+        new_hypothesis = hypothesis(logprob, lm_state, h, phrase, covered, start, end)
         new_hypotheses.append(new_hypothesis)
     return new_hypotheses
 
-# begin decoding
+# decode
 sys.stderr.write("Decoding %s...\n" % (opts.input,))
 for f in french:
-    # set up all the stacks for this sentence (including the empty stack)
     stacks = [{} for _ in f] + [{}]
-
     # create an initial hypothesis and add it to the stack
     cover = tuple([0 for _ in f])
     initial_hypothesis = hypothesis(0.0, lm.begin(), None, None, cover, 0, 0)
 
-    stacks[0][((0,0), cover)] = initial_hypothesis  # each hypothesis is uniquely identified by the the last phrase it translated and its coverage. it can recombine with other hypotheses with the same properties
+    # hypothesis identified by the last phrase it translated and its coverage
+    stacks[0][((0,0), cover)] = initial_hypothesis 
 
-    # expand the top k hypotheses in each stack (except the last one since we can't expand
-    # it any further anyway)
+    # expand the top k hypotheses in each stack
     for (x, stack) in enumerate(stacks[:-1]):
-        #prune the stack to keep just the top k hypotheses in it only
         for h in sorted(stack.itervalues(), key = lambda h: -h.logprob)[:opts.s]:
-            # append phrases that came before the phrase in the current hypoth
+            # range of phrases before hypothesis
             for i in range(0, h.start):
                 for j in range(i+1, h.start+1):
-                    new_hypotheses = expand_hypothesis(h, f, i, j)
+                    new_hypotheses = coverage_hypothesis(h, f, i, j)
 
-                    if new_hypotheses: # if it isn't None
-
-                        #add each new hypothesis to the appropriate stack:
+                    if new_hypotheses: 
+                        # add hypothesis to stack
                         for new_hypothesis in new_hypotheses:
                             new_key = ((new_hypothesis.start, new_hypothesis.end), new_hypothesis.coverage)
                             new_stack_num = sum(new_hypothesis.coverage)
-
                             # If hypothesis new or better score, set
                             if new_key not in stacks[new_stack_num] or stacks[new_stack_num][new_key].logprob < new_hypothesis.logprob:
                                 stacks[new_stack_num][new_key] = new_hypothesis
             
-            # append phrases that came after the phrase in the current hypothesis
+            # range of phrases after hypothesis
             for i in range(h.end, len(f)):
                 for j in range(i+1, len(f)+1):
-                    new_hypotheses = expand_hypothesis(h, f, i, j)
+                    new_hypotheses = coverage_hypothesis(h, f, i, j)
                     
-                    if new_hypotheses: # if it isn't None                        
-                         # add each new hypothesis to the appropriate stack
+                    if new_hypotheses:                    
                          for new_hypothesis in new_hypotheses:
                             new_key = ((new_hypothesis.start, new_hypothesis.end), new_hypothesis.coverage)
                             new_stack_num = sum(new_hypothesis.coverage)
 
-                            # if we haven't seen this hypothesis before OR if we have but its prev score was less than its new score,
-                            # add in this new hypothesis to the appropriate stack
+                            # if hypothesis new or superior score
                             if new_key not in stacks[new_stack_num] or stacks[new_stack_num][new_key].logprob < new_hypothesis.logprob:
                                 stacks[new_stack_num][new_key] = new_hypothesis
 
-    # find the best hypothesis for this sentence
     winner = max(stacks[-1].itervalues(), key=lambda h: h.logprob)
     def extract_english(h): 
         return "" if h.predecessor is None else "%s%s " % (extract_english(h.predecessor), h.phrase.english)
